@@ -1,0 +1,5 @@
+citysearch_api/target/
+citysearch_api/Cargo.lock
+citysearch_api/**/*.rs.bk
+citysearch_db/citysearch.city.h5
+README.md
