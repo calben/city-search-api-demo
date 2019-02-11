@@ -103,18 +103,33 @@ impl CityRecord {
         //     b = (String::from(search_term)[..(&self.name.len())]).as_ref();
         // }
         let longest = min(self.name.len(), search_term.len());
-        let a = &self
-            .name
-            .to_lowercase()
-            .chars()
-            .take(longest)
-            .collect::<String>();
+        let mut v = Vec::new();
+        v.push(
+            self.name
+                .to_lowercase()
+                .chars()
+                .take(longest)
+                .collect::<String>(),
+        );
+        for name in &self.alt_names {
+            let shortened = name
+                .to_lowercase()
+                .chars()
+                .take(longest)
+                .collect::<String>();
+            v.push(shortened);
+        }
+        println!("{:?}", v);
         let b = &search_term.to_string().to_lowercase()[..longest];
         //
         // http://users.cecs.anu.edu.au/~Peter.Christen/publications/tr-cs-06-02.pdf
         // WINKLER PERFORMS WELL ACCORDING TO THIS PAPER
         //
-        let name_distance_score = jaro_winkler(a, b);
+        let name_distance_score = v
+            .iter()
+            .map(|a| jaro_winkler(a, b))
+            .min_by(|a, b| b.partial_cmp(a).unwrap())
+            .unwrap();
         match position {
             // note that this still uses the name distance as the "priority" difference
             // the population and distance scores will just work as tiebreakers
@@ -128,8 +143,8 @@ impl CityRecord {
                     > 0.55
                 {
                     println!(
-                        "name distance score between {} and {} is {}, position is {:?} to {:?} at {}, population score is {}",
-                        a,
+                        "name distance score between {:?} and {} is {}, position is {:?} to {:?} at {}, population score is {}",
+                        v,
                         b,
                         name_distance_score,
                         self.position,
@@ -145,8 +160,8 @@ impl CityRecord {
             None => {
                 if 0.8 * name_distance_score + 0.2 * self.population_score() > 0.55 {
                     println!(
-                        "name distance score between {} and {} is {} and the population score is {}",
-                        a,
+                        "name distance score between {:?} and {} is {} and the population score is {}",
+                        v,
                         b,
                         name_distance_score,
                         self.population_score()
