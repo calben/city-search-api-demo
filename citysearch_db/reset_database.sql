@@ -1,7 +1,7 @@
 
 --- DROP IF SCHEMA EXISTS
 
-drop schema citysearch cascade;
+drop schema if exists citysearch cascade;
 
 --- CREATE SCHEMA AND IMPORT EXTENSIONS
 
@@ -9,7 +9,7 @@ create schema citysearch;
 
 create extension if not exists postgis;
 create extension if not exists postgis_topology;
-create extension if not exists postgis_sfcgal;
+-- create extension if not exists postgis_sfcgal;
 create extension if not exists fuzzystrmatch;
 
 --- TABLES
@@ -33,8 +33,8 @@ create table citysearch.city (
     elevation           int,                                    
     dem                 int,                              
     tz                  varchar(40),                             
-    modified_at         timestamp not null default now()    
---    ,position            geometry                                  
+    modified_at         timestamp not null default now(),    
+    position            geometry                                  
 );
 
 --- FUNCTIONS
@@ -67,7 +67,7 @@ returns null on null input;
 --- inefficient for many queries because needs to redo makepoint and transform
 create or replace function citysearch.city_position_distance(city citysearch.city, lat double precision, long double precision)
 returns double precision as $$
-  select st_distancesphere(city.position, st_setsrid(st_makepoint(lat, long), 4326))
+  select st_distancesphere($1.position, st_setsrid(st_makepoint(lat, long), 4326))
 $$ language sql stable;
 
 create type citysearch.city_distance_result as (city citysearch.city, name_distance int, position_distance double precision);

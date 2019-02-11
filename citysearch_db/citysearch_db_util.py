@@ -75,7 +75,6 @@ def load_tsv(args, cursor, source):
                     + ");")
             cursor.execute(command)
             cursor.connection.commit()
-            print(cursor.connection.notices)
 
 
 if __name__ == "__main__":
