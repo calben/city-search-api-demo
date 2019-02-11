@@ -31,6 +31,7 @@ def main():
 def reset_database(cursor):
     print("resetting database")
     cursor.execute(open("reset_database.sql", "r").read())
+    cursor.connection.commit()
     print(cursor.connection.notices)
     print("successfully reset")
 
@@ -73,7 +74,8 @@ def load_tsv(args, cursor, source):
                     + ",".join([("'{}'".format(x) if type(x) is str else str(x)) for x in row.values]) 
                     + ");")
             cursor.execute(command)
-    print(cursor.connection.notices)
+            cursor.connection.commit()
+            print(cursor.connection.notices)
 
 
 if __name__ == "__main__":

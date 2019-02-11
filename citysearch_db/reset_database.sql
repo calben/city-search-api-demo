@@ -33,8 +33,8 @@ create table citysearch.city (
     elevation           int,                                    
     dem                 int,                              
     tz                  varchar(40),                             
-    modified_at         timestamp not null default now(),    
-    position            geometry                                  
+    modified_at         timestamp not null default now()    
+--    ,position            geometry                                  
 );
 
 --- FUNCTIONS
