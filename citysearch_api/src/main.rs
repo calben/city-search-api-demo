@@ -141,7 +141,7 @@ impl CityRecord {
             Some(p) => {
                 let position_score = position_score(self.position, p);
                 let score =
-                    0.5 * name_distance_score + 0.4 * position_score + 0.1 * population_score;
+                    0.25 * name_distance_score + 0.6 * position_score + 0.05 * population_score;
                 #[cfg(feature = "logscoring")]
                 {
                     if score > 0.5 {
