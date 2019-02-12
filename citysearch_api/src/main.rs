@@ -137,10 +137,10 @@ impl CityRecord {
             Some(p) => {
                 let position_score = position_score(self.position, p);
                 let score =
-                    0.6 * name_distance_score + 0.3 * position_score + 0.1 * population_score;
+                    0.5 * name_distance_score + 0.4 * position_score + 0.1 * population_score;
                 #[cfg(feature = "logscoring")]
                 {
-                    if score > 0.9 {
+                    if score > 0.5 {
                         println!(
                         "name distance score between {:?} and {} is {}, position is {:?} to {:?} at {}, population score is {}",
                         names,
@@ -159,7 +159,7 @@ impl CityRecord {
                 let score = 0.8 * name_distance_score + 0.2 * population_score;
                 #[cfg(feature = "logscoring")]
                 {
-                    if score > 0.9 {
+                    if score > 0.5 {
                         println!(
                             "name distance score between {:?} and {} is {} and the population score is {}",
                             names,
