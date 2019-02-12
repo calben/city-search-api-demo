@@ -76,6 +76,20 @@ mod tests {
     }
 
     #[test]
+    fn test_new_york_to_houston_position_score() {
+        let nyc = Point::<f64>::from((-74.00597, 40.71427));
+        let houston = Point::<f64>::from((-95.36327, 29.76328));
+        assert_relative_eq!(position_score(nyc, houston), 0.94, epsilon = 1.0e-2);
+    }
+
+    #[test]
+    fn test_new_york_to_toronto_position_score() {
+        let nyc = Point::<f64>::from((-74.00597, 40.71427));
+        let to = Point::<f64>::from((-79.4163, 43.70011));
+        assert_relative_eq!(position_score(nyc, to), 0.98, epsilon = 1.0e-2);
+    }
+
+    #[test]
     fn test_name_score_high() {
         let names = vec!["aaa".to_string(), "naw".to_string(), "raw".to_string()];
         let q = "row";
