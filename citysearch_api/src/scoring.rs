@@ -5,7 +5,7 @@ use geo::prelude::*;
 use geo::Point;
 use strsim::jaro_winkler;
 
-const EARTH_CIRCUMFERENCE: i64 = 40_075_000;
+const HALF_EARTH_CIRCUMFERENCE: i64 = 20_037_500;
 const MAX_POPULATION: i64 = 8_175_133;
 
 pub fn position_score(a: Point<f64>, b: Point<f64>) -> f64 {
@@ -13,7 +13,7 @@ pub fn position_score(a: Point<f64>, b: Point<f64>) -> f64 {
     // plus a little for computation error
     // this is the expected maximum city distance
     // guaranteeing this value is always < 1
-    1.0 - (a.vincenty_distance(&b).unwrap() / EARTH_CIRCUMFERENCE as f64)
+    1.0 - (a.vincenty_distance(&b).unwrap() / (HALF_EARTH_CIRCUMFERENCE as f64))
 }
 
 //
@@ -76,17 +76,17 @@ mod tests {
     }
 
     #[test]
-    fn test_new_york_to_houston_position_score() {
-        let nyc = Point::<f64>::from((-74.00597, 40.71427));
-        let houston = Point::<f64>::from((-95.36327, 29.76328));
-        assert_relative_eq!(position_score(nyc, houston), 0.94, epsilon = 1.0e-2);
-    }
-
-    #[test]
     fn test_new_york_to_toronto_position_score() {
         let nyc = Point::<f64>::from((-74.00597, 40.71427));
         let to = Point::<f64>::from((-79.4163, 43.70011));
-        assert_relative_eq!(position_score(nyc, to), 0.98, epsilon = 1.0e-2);
+        assert_relative_eq!(position_score(nyc, to), 0.972, epsilon = 1.0e-2);
+    }
+
+    #[test]
+    fn test_new_york_to_houston_position_score() {
+        let nyc = Point::<f64>::from((-74.00597, 40.71427));
+        let houston = Point::<f64>::from((-95.36327, 29.76328));
+        assert_relative_eq!(position_score(nyc, houston), 0.886, epsilon = 1.0e-2);
     }
 
     #[test]
