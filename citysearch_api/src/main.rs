@@ -12,7 +12,6 @@ extern crate postgres;
 #[macro_use]
 extern crate lazy_static;
 extern crate geo;
-extern crate strsim;
 
 use std::cmp::min;
 use std::str::FromStr;
@@ -21,16 +20,15 @@ use std::str::FromStr;
 use std::thread;
 
 use argparse::{ArgumentParser, Store, StoreTrue};
-use strsim::jaro_winkler;
 
 use actix_web::http::Method;
 use actix_web::{middleware, server, App, HttpResponse, Query};
-use geo::prelude::*;
 use geo::Point;
 use postgres::{Connection, TlsMode};
 use std::collections::HashMap;
-// use chrono::{NaiveDate, NaiveDateTime};
-// use postgis::ewkb::EwkbPoint;
+
+mod scoring;
+use scoring::*;
 
 #[derive(Copy)]
 enum DataSource {
@@ -105,8 +103,8 @@ impl CityRecord {
         //     b = (String::from(search_term)[..(&self.name.len())]).as_ref();
         // }
         let longest = min(self.name.len(), search_term.len());
-        let mut v = Vec::new();
-        v.push(
+        let mut names = Vec::new();
+        names.push(
             self.name
                 .to_lowercase()
                 .chars()
@@ -119,20 +117,17 @@ impl CityRecord {
                 .chars()
                 .take(longest)
                 .collect::<String>();
-            v.push(shortened);
+            names.push(shortened);
         }
-        let b = &search_term.to_string().to_lowercase().chars()
-                .take(longest)
-                .collect::<String>();
-        //
-        // http://users.cecs.anu.edu.au/~Peter.Christen/publications/tr-cs-06-02.pdf
-        // WINKLER PERFORMS WELL ACCORDING TO THIS PAPER
-        //
-        let name_distance_score = v
-            .iter()
-            .map(|a| jaro_winkler(a, b))
-            .min_by(|a, b| b.partial_cmp(a).unwrap())
-            .unwrap();
+        let q = &search_term
+            .to_string()
+            .to_lowercase()
+            .chars()
+            .take(longest)
+            .collect::<String>();
+
+        let name_distance_score = name_score(q, &names);
+        let population_score = population_score(self.population);
         match position {
             // note that this still uses the name distance as the "priority" difference
             // the population and distance scores will just work as tiebreakers
@@ -140,55 +135,43 @@ impl CityRecord {
             // but it would mean making 3 passes on all the values
             // and probably wouldn't improve our results much
             Some(p) => {
-                if 0.6 * name_distance_score
-                    + 0.3 * self.positional_distance_score(p)
-                    + 0.1 * self.population_score()
-                    > 0.55
+                let position_score = position_score(self.position, p);
+                let score =
+                    0.6 * name_distance_score + 0.3 * position_score + 0.1 * population_score;
+                #[cfg(feature = "logscoring")]
                 {
-                    #[cfg(feature = "logscoring")]
-                    println!(
+                    if score > 0.9 {
+                        println!(
                         "name distance score between {:?} and {} is {}, position is {:?} to {:?} at {}, population score is {}",
-                        v,
-                        b,
+                        names,
+                        q,
                         name_distance_score,
                         self.position,
                         p,
-                        self.positional_distance_score(p),
-                        self.population_score()
+                        position_score,
+                        population_score
                     );
+                    }
                 }
-                0.6 * name_distance_score
-                    + 0.3 * self.positional_distance_score(p)
-                    + 0.1 * self.population_score()
+                score
             }
             None => {
-                if 0.8 * name_distance_score + 0.2 * self.population_score() > 0.55 {
-                    #[cfg(feature = "logscoring")]
-                    println!(
-                        "name distance score between {:?} and {} is {} and the population score is {}",
-                        v,
-                        b,
-                        name_distance_score,
-                        self.population_score()
-                    );
+                let score = 0.8 * name_distance_score + 0.2 * population_score;
+                #[cfg(feature = "logscoring")]
+                {
+                    if score > 0.9 {
+                        println!(
+                            "name distance score between {:?} and {} is {} and the population score is {}",
+                            names,
+                            q,
+                            name_distance_score,
+                            population_score
+                        );
+                    }
                 }
-                0.8 * name_distance_score + 0.2 * self.population_score()
+                score
             }
         }
-    }
-
-    fn positional_distance_score(&self, b: Point<f64>) -> f64 {
-        // 40 million is for earth circumfrence
-        // plus a little for computation error
-        // this is the expected maximum city distance
-        // guaranteeing this value is always < 1
-        1.0 - (self.position.vincenty_distance(&b).unwrap() / 40_075_000.0)
-    }
-
-    // theoretically can be precomputed
-    fn population_score(&self) -> f64 {
-        // city population divided by the dervied maximum
-        (self.population as f64) / 4612191.0
     }
 }
 
@@ -288,7 +271,7 @@ fn get_suggestions_memory(query: Query<SuggestionParam>) -> HttpResponse {
 
     let mut top_results: Vec<CityResult>;
 
-    match () {  
+    match () {
         #[cfg(not(feature = "parallelscoring"))]
         () => {
             println!("Running scoring in single thread.");
@@ -352,7 +335,7 @@ fn main() {
     // it isn't as full featured as another project called clap
     // but argparse seemed to be able to do the job quickly enough
     let mut verbose = false;
-    let mut data_source = DataSource::Postgres;
+    let mut data_source = DataSource::Memory;
     {
         let mut ap = ArgumentParser::new();
         ap.set_description("City Search Rest API Server Main Process");
