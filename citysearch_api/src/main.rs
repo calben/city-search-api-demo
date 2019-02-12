@@ -16,6 +16,8 @@ extern crate strsim;
 
 use std::cmp::min;
 use std::str::FromStr;
+
+#[cfg(feature = "parallelscoring")]
 use std::thread;
 
 use argparse::{ArgumentParser, Store, StoreTrue};
@@ -119,8 +121,9 @@ impl CityRecord {
                 .collect::<String>();
             v.push(shortened);
         }
-        println!("{:?}", v);
-        let b = &search_term.to_string().to_lowercase()[..longest];
+        let b = &search_term.to_string().to_lowercase().chars()
+                .take(longest)
+                .collect::<String>();
         //
         // http://users.cecs.anu.edu.au/~Peter.Christen/publications/tr-cs-06-02.pdf
         // WINKLER PERFORMS WELL ACCORDING TO THIS PAPER
@@ -142,6 +145,7 @@ impl CityRecord {
                     + 0.1 * self.population_score()
                     > 0.55
                 {
+                    #[cfg(feature = "logscoring")]
                     println!(
                         "name distance score between {:?} and {} is {}, position is {:?} to {:?} at {}, population score is {}",
                         v,
@@ -159,6 +163,7 @@ impl CityRecord {
             }
             None => {
                 if 0.8 * name_distance_score + 0.2 * self.population_score() > 0.55 {
+                    #[cfg(feature = "logscoring")]
                     println!(
                         "name distance score between {:?} and {} is {} and the population score is {}",
                         v,
@@ -281,43 +286,52 @@ fn get_suggestions_memory(query: Query<SuggestionParam>) -> HttpResponse {
         None
     };
 
-    // PARALLEL
-    // TODO NEED TO SOLVE ONE DEFERENCE BUG
-    // let chunked_data = CITYRECORDS.get(&0).unwrap().chunks(250);
-    // let mut children = vec![];
-    // for (_i, city_records) in chunked_data.enumerate() {
-    //     // overshadowing q for each thread
-    //     let q = query.q.clone();
-    //     children.push(thread::spawn(move || -> Vec<CityResult> {
-    //         // have to create a copy of this
-    //         let mut thread_records: Vec<CityResult> = city_records
-    //             .to_vec()
-    //             .iter()
-    //             .map(move |record| record.to_cityresult(&q.as_ref(), position))
-    //             .collect();
-    //         thread_records.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
-    //         let result = thread_records[..15].to_vec().clone();
-    //         // println!("processed segment {}, result={:?}", i, result);
-    //         result
-    //     }));
-    // }
-    // let mut joined_results = Vec::new();
-    // for child in children {
-    //     let intermediate_vec = child.join().unwrap();
-    //     joined_results.extend(intermediate_vec.iter());
-    // }
-    // joined_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
-    // let top_results = joined_results[..15].to_vec();
+    let mut top_results: Vec<CityResult>;
 
-    // SINGLE THREADED
-    let mut all_results: Vec<CityResult> = CITYRECORDS
-        .get(&0)
-        .unwrap()
-        .iter()
-        .map(move |record| record.to_cityresult(&q.as_ref(), position))
-        .collect();
-    all_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
-    let top_results = all_results[..15].to_vec();
+    match () {  
+        #[cfg(not(feature = "parallelscoring"))]
+        () => {
+            println!("Running scoring in single thread.");
+            let mut all_results: Vec<CityResult> = CITYRECORDS
+                .get(&0)
+                .unwrap()
+                .iter()
+                .map(move |record| record.to_cityresult(&q.as_ref(), position))
+                .collect();
+            all_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+            top_results = all_results[..15].to_vec();
+        }
+        #[cfg(feature = "parallelscoring")]
+        () => {
+            println!("Running scoring in parallel threads.");
+            let chunked_data = CITYRECORDS.get(&0).unwrap().chunks(250);
+            let mut children = vec![];
+            for (_i, city_records) in chunked_data.enumerate() {
+                // overshadowing q for each thread
+                let q = query.q.clone();
+                children.push(thread::spawn(move || -> Vec<CityResult> {
+                    // have to create a copy of this
+                    let mut thread_records: Vec<CityResult> = city_records
+                        .to_vec()
+                        .iter()
+                        .map(move |record| record.to_cityresult(&q.as_ref(), position))
+                        .collect();
+                    thread_records.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+                    let result = thread_records[..15].to_vec().clone();
+                    // println!("processed segment {}, result={:?}", i, result);
+                    result
+                }));
+            }
+            let mut joined_results = Vec::new();
+            for child in children {
+                let intermediate_vec = child.join().unwrap();
+                joined_results.extend(intermediate_vec.iter());
+            }
+            joined_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+            top_results = joined_results[..15].to_vec();
+        }
+    }
+
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(
