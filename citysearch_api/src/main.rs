@@ -16,6 +16,10 @@ extern crate geo;
 use std::cmp::min;
 use std::str::FromStr;
 
+#[cfg(test)]
+#[macro_use]
+extern crate approx;
+
 #[cfg(feature = "parallelscoring")]
 use std::thread;
 
